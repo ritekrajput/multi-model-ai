@@ -33,7 +33,7 @@ class CrossAttentionBlock(nn.Module):
 class FusionCrossAttention(nn.Module):
     def __init__(self, dim_text=256, dim_audio=256, dim_visual=256, fusion_dim=256):
         super().__init__()
-        # projectors
+        # projectors (input dims -> fusion_dim)
         self.pt = nn.Linear(dim_text, fusion_dim)
         self.pa = nn.Linear(dim_audio, fusion_dim)
         self.pv = nn.Linear(dim_visual, fusion_dim)
@@ -44,75 +44,94 @@ class FusionCrossAttention(nn.Module):
         self.av = CrossAttentionBlock(fusion_dim)
         self.vt = CrossAttentionBlock(fusion_dim)
         self.va = CrossAttentionBlock(fusion_dim)
-        # gating
+        # gating (text/audio/visual)
         self.gate = nn.Parameter(torch.ones(3))  # text/audio/visual gates
+        self.fusion_dim = fusion_dim
 
     def forward(self, text_vec, audio_vec, visual_vec, mask=(True,True,True)):
-        # All inputs are (B, D) or None. Convert to (B,1,D) sequence
-        B = text_vec.shape[0] if text_vec is not None else (audio_vec.shape[0] if audio_vec is not None else visual_vec.shape[0])
-        # Prepare sequences
-        def proj(x, p):
-            return p(x).unsqueeze(1)  # (B,1,D)
-        t = proj(text_vec, self.pt) if text_vec is not None else None
-        a = proj(audio_vec, self.pa) if audio_vec is not None else None
-        v = proj(visual_vec, self.pv) if visual_vec is not None else None
+        # All inputs are (B, D) or None. Convert to (B,1,D) sequences or zeros when missing.
+        device = next(self.parameters()).device
+        B = None
+        if text_vec is not None:
+            B = text_vec.shape[0]
+        elif audio_vec is not None:
+            B = audio_vec.shape[0]
+        elif visual_vec is not None:
+            B = visual_vec.shape[0]
+        else:
+            raise ValueError("No modalities provided to FusionCrossAttention")
 
-        # pairwise cross-attention (if missing, skip)
-        # For each modality, let it query others, then pool results
-        out = []
-        # Text as query
-        if t is not None:
-            klist = []
-            if a is not None:
-                klist.append(self.ta(t, a))
-            if v is not None:
-                klist.append(self.tv(t, v))
-            if klist:
-                t_out = torch.mean(torch.stack(klist, dim=0), dim=0).squeeze(1)
+        # helper to project or return zeros (B,1,fusion_dim)
+        def proj_or_zero(x, proj):
+            if x is None:
+                return torch.zeros((B, 1, self.fusion_dim), device=device)
             else:
-                t_out = t.squeeze(1)
-            out.append(t_out * self.gate[0])
-        # Audio as query
-        if a is not None:
-            klist = []
-            if t is not None:
-                klist.append(self.at(a, t))
-            if v is not None:
-                klist.append(self.av(a, v))
-            if klist:
-                a_out = torch.mean(torch.stack(klist, dim=0), dim=0).squeeze(1)
-            else:
-                a_out = a.squeeze(1)
-            out.append(a_out * self.gate[1])
-        # Visual as query
-        if v is not None:
-            klist = []
-            if t is not None:
-                klist.append(self.vt(v, t))
-            if a is not None:
-                klist.append(self.va(v, a))
-            if klist:
-                v_out = torch.mean(torch.stack(klist, dim=0), dim=0).squeeze(1)
-            else:
-                v_out = v.squeeze(1)
-            out.append(v_out * self.gate[2])
+                return proj(x).unsqueeze(1)
 
-        if not out:
-            raise ValueError("No modalities provided")
-        fused = torch.cat(out, dim=1)  # (B, D*num_present)
+        t = proj_or_zero(text_vec, self.pt)   # (B,1,fusion_dim)
+        a = proj_or_zero(audio_vec, self.pa)
+        v = proj_or_zero(visual_vec, self.pv)
+
+        # For each modality as query, attend to the other modalities if present.
+        # But keep fixed outputs for all three modalities (zero-filled if missing).
+        # Text query
+        t_klist = []
+        if audio_vec is not None:
+            t_klist.append(self.ta(t, a))
+        if visual_vec is not None:
+            t_klist.append(self.tv(t, v))
+        if t_klist:
+            t_out = torch.mean(torch.stack(t_klist, dim=0), dim=0).squeeze(1)
+        else:
+            t_out = t.squeeze(1)  # either projected text or zeros
+
+        # Audio query
+        a_klist = []
+        if text_vec is not None:
+            a_klist.append(self.at(a, t))
+        if visual_vec is not None:
+            a_klist.append(self.av(a, v))
+        if a_klist:
+            a_out = torch.mean(torch.stack(a_klist, dim=0), dim=0).squeeze(1)
+        else:
+            a_out = a.squeeze(1)
+
+        # Visual query
+        v_klist = []
+        if text_vec is not None:
+            v_klist.append(self.vt(v, t))
+        if audio_vec is not None:
+            v_klist.append(self.va(v, a))
+        if v_klist:
+            v_out = torch.mean(torch.stack(v_klist, dim=0), dim=0).squeeze(1)
+        else:
+            v_out = v.squeeze(1)
+
+        # apply gates (broadcast)
+        gated_t = t_out * self.gate[0]
+        gated_a = a_out * self.gate[1]
+        gated_v = v_out * self.gate[2]
+
+        # always concatenate three parts -> fixed (B, fusion_dim*3)
+        fused = torch.cat([gated_t, gated_a, gated_v], dim=1)
         return fused
 
 class MFFNC(nn.Module):
-    def __init__(self, text_dim=384, audio_dim=256, visual_dim=128, stats_dim=16, fusion_dim=256, hidden=256):
+    def __init__(self, text_dim=384, audio_dim=256, visual_dim=128, stats_dim=5, fusion_dim=256, hidden=256):
+        """
+        stats_dim default set to 5 to match the collate_fn that builds a 5-element stats vector.
+        """
         super().__init__()
         # per-modality projectors (if already embeddings, you can fine-tune sizes)
         self.text_proj = nn.Linear(text_dim, 256)
         self.audio_proj = nn.Linear(audio_dim, 256)
         self.visual_proj = nn.Linear(visual_dim, 256)
+        # stats projector: input stats_dim -> 64
         self.stats_proj = MLP(stats_dim, 64, hidden=128)
+        # fusion module (always returns fusion_dim * 3)
         self.fuser = FusionCrossAttention(dim_text=256, dim_audio=256, dim_visual=256, fusion_dim=fusion_dim)
-        # combine fused + stats
-        fusion_out_dim = fusion_dim * 3  # because we concatenate present ones; safe upper-bound
+        # combine fused + stats (fixed sizes: fusion_dim*3 + 64)
+        fusion_out_dim = fusion_dim * 3
         self.comb = nn.Sequential(
             nn.Linear(fusion_out_dim + 64, hidden),
             nn.ReLU(),
@@ -123,10 +142,29 @@ class MFFNC(nn.Module):
         self.reg_head = nn.Linear(hidden, 1)
 
     def forward(self, text_emb=None, audio_emb=None, visual_emb=None, stats_vec=None):
-        t = self.text_proj(text_emb) if text_emb is not None else None
+        # project modality embeddings if present
+        t = self.text_proj(text_emb) if text_emb is not None else None  # (B,256)
         a = self.audio_proj(audio_emb) if audio_emb is not None else None
         v = self.visual_proj(visual_emb) if visual_emb is not None else None
-        s = self.stats_proj(stats_vec) if stats_vec is not None else torch.zeros((t.shape[0] if t is not None else (a.shape[0] if a is not None else v.shape[0]),64), device=next(self.parameters()).device)
+
+        # stats projection or zero (B,64)
+        device = next(self.parameters()).device
+        if stats_vec is not None:
+            s = self.stats_proj(stats_vec)
+        else:
+            # infer batch size from any present modality
+            bs = None
+            if t is not None:
+                bs = t.shape[0]
+            elif a is not None:
+                bs = a.shape[0]
+            elif v is not None:
+                bs = v.shape[0]
+            else:
+                raise ValueError("At least one modality must be provided")
+            s = torch.zeros((bs, 64), device=device)
+
+        # fused representation (always fixed size fusion_dim*3)
         fused = self.fuser(t, a, v)
         x = torch.cat([fused, s], dim=1)
         x = self.comb(x)
