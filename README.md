@@ -14,37 +14,9 @@ The project is developed as a **final-year engineering project** with an industr
 
 The project follows a layered backend architecture as shown below:
 
-┌─────────────────────────────────────────────────────────────┐
-│                    Mobile / Web Application                 │
-│                                                             │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    │
-│  │ Patient  │  │ Relative │  │ Results  │  │ History  │    │
-│  │ Tests    │  │ Survey   │  │ Dashboard│  │ Tracking │    │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘    │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                        API Gateway Layer                    │
-│        (Authentication, Rate Limiting, Routing)             │
-└─────────────────────────────────────────────────────────────┘
-              │                     │                     │
-              ▼                     ▼                     ▼
-┌──────────────────┐   ┌──────────────┐   ┌─────────────────┐
-│ Data Processing  │   │  AI / ML     │   │  Clinical Logic  │
-│     Service      │   │   Engine     │   │     Service     │
-└──────────────────┘   └──────────────┘   └─────────────────┘
-              │                     │                     │
-              └───────────────┬───────────────┬─────────────┘
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                        Database Layer                       │
-│                                                             │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    │
-│  │ Patient  │  │  Test    │  │  Model   │  │  Audit   │    │
-│  │   DB     │  │ Results  │  │ Storage  │  │  Logs   │    │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘    │
-└─────────────────────────────────────────────────────────────┘
+## 🏗️ High-Level System Architecture
+
+![System Architecture](docs/architecture.png)
 
 
 🔹 **Current development focuses on the AI/ML Engine, Inference Layer, and Clinical Logic**, which together form the core intelligence of the system.
