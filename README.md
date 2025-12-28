@@ -14,29 +14,38 @@ The project is developed as a **final-year engineering project** with an industr
 
 The project follows a layered backend architecture as shown below:
 
-Mobile / Web Application
-│
-├── Patient Tests
-├── Relative Survey
-├── Results Dashboard
-├── History Tracking
-│
-▼
-API Gateway Layer
-(Authentication, Rate Limiting, Routing)
-│
-▼
-Backend Services
-├── Data Processing Service
-├── AI / ML Engine
-├── Clinical Logic Service
-│
-▼
-Database Layer
-├── Patient Database
-├── Test Results
-├── Model Storage
-├── Audit Logs
+┌─────────────────────────────────────────────────────────────┐
+│                    Mobile / Web Application                 │
+│                                                             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    │
+│  │ Patient  │  │ Relative │  │ Results  │  │ History  │    │
+│  │ Tests    │  │ Survey   │  │ Dashboard│  │ Tracking │    │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘    │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                        API Gateway Layer                    │
+│        (Authentication, Rate Limiting, Routing)             │
+└─────────────────────────────────────────────────────────────┘
+              │                     │                     │
+              ▼                     ▼                     ▼
+┌──────────────────┐   ┌──────────────┐   ┌─────────────────┐
+│ Data Processing  │   │  AI / ML     │   │  Clinical Logic  │
+│     Service      │   │   Engine     │   │     Service     │
+└──────────────────┘   └──────────────┘   └─────────────────┘
+              │                     │                     │
+              └───────────────┬───────────────┬─────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                        Database Layer                       │
+│                                                             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    │
+│  │ Patient  │  │  Test    │  │  Model   │  │  Audit   │    │
+│  │   DB     │  │ Results  │  │ Storage  │  │  Logs   │    │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘    │
+└─────────────────────────────────────────────────────────────┘
+
 
 🔹 **Current development focuses on the AI/ML Engine, Inference Layer, and Clinical Logic**, which together form the core intelligence of the system.
 
