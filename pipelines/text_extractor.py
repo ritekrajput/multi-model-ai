@@ -1,27 +1,26 @@
-# pipelines/text_extractor.py
 from transformers import AutoTokenizer, AutoModel
 import torch
-import numpy as np
 
 class TextEncoder:
-    def __init__(self, model_name="hfl/chinese-macbert-base"):
+    def __init__(self, model_name="bert-base-uncased", device="cpu"):
+        self.device = device
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModel.from_pretrained(model_name)
+        self.model = AutoModel.from_pretrained(model_name).to(device)
         self.model.eval()
 
-    def encode(self, texts, device="cpu"):
-        # texts: list[str]
-        with torch.no_grad():
-            inputs = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
-            outputs = self.model(**inputs)
-            # Use pooled CLS or mean
-            if hasattr(outputs, "pooler_output") and outputs.pooler_output is not None:
-                emb = outputs.pooler_output
-            else:
-                emb = outputs.last_hidden_state.mean(dim=1)
-            return emb.cpu().numpy()
+    @torch.no_grad()
+    def encode(self, texts, max_length=128):
+        inputs = self.tokenizer(
+            texts,
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+            return_tensors="pt"
+        )
 
-if __name__ == "__main__":
-    te = TextEncoder()
-    v = te.encode(["I feel tired", "Today was good"])
-    print("text emb shape:", v.shape)
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        outputs = self.model(**inputs)
+
+        # CLS token
+        emb = outputs.last_hidden_state[:, 0, :]
+        return emb.cpu().numpy()
