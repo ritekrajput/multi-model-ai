@@ -53,7 +53,7 @@ class DepressionFusionModel(nn.Module):
 
         # ---- Projections ----
         self.patient_text_proj = Projection(768)
-        self.audio_proj = Projection(88)
+        self.audio_proj = Projection(40)
         self.visual_proj = Projection(52)
         self.relative_text_proj = Projection(768)
 

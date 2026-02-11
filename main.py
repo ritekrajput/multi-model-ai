@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.optim import Adam
 from tqdm import tqdm
 
-from dataset.loader import get_dataloader
+from data.loader import get_dataloader
 from models.fusion_model import DepressionFusionModel
 from models.mffnc import MFFNC
 

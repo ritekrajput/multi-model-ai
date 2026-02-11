@@ -21,3 +21,10 @@ pyannote.core
 python_speech_features
 soundfile
 requests
+fastapi
+uvicorn
+pydantic
+sqlalchemy
+streamlit
+tqdm
+python-dotenv

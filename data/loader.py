@@ -1,6 +1,6 @@
 from torch.utils.data import DataLoader
-from dataset.multimodel_dataset import DepressionDataset
-from dataset.collate import depression_collate
+from data.multimodel_dataset import DepressionDataset
+from data.collate import depression_collate
 
 def get_dataloader(
     csv_path,

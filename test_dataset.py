@@ -1,4 +1,4 @@
-from dataset.loader import get_dataloader
+from data.loader import get_dataloader
 
 loader = get_dataloader(
     csv_path="data/metadata.csv",
